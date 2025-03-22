@@ -5,6 +5,9 @@ res: $(sources)
 
 build: res
 
+dev:
+	go run ./cmd/... $(ARGS)
+
 format:
 	go fmt ./...
 

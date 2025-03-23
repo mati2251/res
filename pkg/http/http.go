@@ -1,28 +1,74 @@
 package http
 
 import (
+	"log"
 	"net/http"
 	"res/pkg/vm"
+	"time"
 )
 
-// add checking if the sources is available
+type ResponseWriterMiddleware struct {
+  http.ResponseWriter
+  statusCode int
+  contentLength int
+}
+
+func (rwm *ResponseWriterMiddleware) WriteHeader(statusCode int) {
+  rwm.statusCode = statusCode
+  rwm.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (rwm *ResponseWriterMiddleware) Write(b []byte) (int, error) {
+  if rwm.statusCode == 0 {
+    rwm.statusCode = http.StatusOK
+  }
+  if rwm.contentLength == 0 {
+    rwm.contentLength += len(b)
+  }
+  return rwm.ResponseWriter.Write(b)
+}
+
+func CommonLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+    rwm := &ResponseWriterMiddleware{w, 0, 0}
+		next.ServeHTTP(rwm, r)
+		log.Printf("%s - - [%s] \"%s %s %s\" %d %d",
+			r.RemoteAddr,
+			start.Format("02/Jan/2006:15:04:05 -0700"),
+			r.Method,
+			r.URL.Path,
+			r.Proto,
+      rwm.statusCode,
+      rwm.contentLength,
+		)
+	})
+}
+
+// TODO add checking if the sources is available
 func PostJob(w http.ResponseWriter, r *http.Request) {
-	virtualMachine := vm.New()
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	job := vm.NewJob("script.sh")
 	go func() {
-		err := vm.Spawn(virtualMachine)
+		err := vm.Spawn(job.Vm)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+      log.Printf("Error during spawning job %d: %v", job.Id, err)
 			return
 		}
-		if err := vm.ExecScript(virtualMachine, "script.sh"); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err := vm.ExecScript(job.Vm, "script.sh"); err != nil {
+      log.Printf("Error during executing script on job %d: %v", job.Id, err)
 			return
 		}
-		if err := vm.Kill(virtualMachine); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err := vm.Kill(job.Vm); err != nil {
+      log.Printf("Error during killing job %d: %v", job.Id, err)
 			return
 		}
 	}()
+	w.WriteHeader(http.StatusCreated)
 }
 
 func GetJob(w http.ResponseWriter, r *http.Request) {

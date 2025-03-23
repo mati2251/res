@@ -9,7 +9,16 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var jobCounter, vmCounter int64 = 0, 0
+
+type Job struct {
+	Id     int64           `json:"id"`
+	Script string          `json:"script"`
+	Vm     *VirtualMachine `json:"vm"`
+}
+
 type VirtualMachine struct {
+	Id     int64  `json:"id"`
 	Image  string `json:"image"`
 	Memory int    `json:"memory"`
 	Cpus   int    `json:"cpus"`
@@ -17,8 +26,19 @@ type VirtualMachine struct {
 	cmd    *exec.Cmd
 }
 
-func New() *VirtualMachine {
+func NewJob(script string) *Job {
+  jobCounter++
+  return &Job{
+    Id:     jobCounter,
+    Script: script,
+    Vm:     NewVM(),
+  }
+}
+
+func NewVM() *VirtualMachine {
+	vmCounter++
 	return &VirtualMachine{
+		Id:     vmCounter,
 		Image:  "/home/mateusz/Images/qemu/debian/clean-ssh.qcow2",
 		Memory: 2048,
 		Cpus:   2,
@@ -51,6 +71,7 @@ func Spawn(vm *VirtualMachine) error {
 	return nil
 }
 
+// TODO: implement custom timeout
 func ExecScript(vm *VirtualMachine, script string) error {
 	config := &ssh.ClientConfig{
 		User: "root",
@@ -61,7 +82,7 @@ func ExecScript(vm *VirtualMachine, script string) error {
 	}
 
 	var client *ssh.Client
-  var err error
+	var err error
 	for range 10 {
 		client, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", vm.Port), config)
 		if err == nil {
@@ -70,35 +91,30 @@ func ExecScript(vm *VirtualMachine, script string) error {
 		time.Sleep(2 * time.Second)
 	}
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return fmt.Errorf("failed to dial: %v", err)
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create session: %v", err)
 	}
 	defer session.Close()
 	err = session.Run("mount -t 9p -o trans=virtio hostshare /mnt/share")
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return fmt.Errorf("failed to mount: %v", err)
 	}
 
 	session, err = client.NewSession()
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return fmt.Errorf("failed to create session: %v", err)
 	}
 	session.Stdout = os.Stdout
 	session.Stderr = os.Stderr
 	stdin, err := session.StdinPipe()
 	err = session.Run(fmt.Sprintf("/mnt/share/%s", script))
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		return fmt.Errorf("failed to run script: %v", err)
 	}
 	stdin.Close()
 	return nil

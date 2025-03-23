@@ -1,13 +1,17 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	handlers "res/pkg/http"
 )
 
 func main() {
-	http.HandleFunc("/job", handlers.PostJob)
-  log.Println("Server started on port 8080")
-  log.Fatal(http.ListenAndServe(":8080", nil))
+  mux := http.NewServeMux()
+  mux.HandleFunc("/job", handlers.PostJob)
+  loggedMux := handlers.CommonLogger(mux)
+	port := 8080
+	log.Printf("Server started on port %d", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), loggedMux))
 }

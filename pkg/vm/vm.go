@@ -35,7 +35,7 @@ func NewJob(script string) *Job {
 }
 
 func (job *Job) BaseDir() string {
-  return fmt.Sprintf("%s/%d", job.baseDir, job.Id)
+	return fmt.Sprintf("%s/%d", job.baseDir, job.Id)
 }
 
 func (job *Job) FilePath(file JobFile) string {
@@ -125,14 +125,14 @@ func (j *Job) ExecScript() error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %v", err)
 	}
-  err = os.MkdirAll(j.BaseDir(), 0755)
-  if err != nil {
-    return fmt.Errorf("failed to create base dir: %v", err)
-  }
+	err = os.MkdirAll(j.BaseDir(), 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create base dir: %v", err)
+	}
 	logFile, err := os.Create(j.FilePath(Log))
-  if err != nil {
-    return fmt.Errorf("failed to create log file: %v", err)
-  }
+	if err != nil {
+		return fmt.Errorf("failed to create log file: %v", err)
+	}
 	defer logFile.Close()
 	session.Stdout = logFile
 	session.Stderr = logFile

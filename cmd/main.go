@@ -8,9 +8,9 @@ import (
 )
 
 func main() {
-  mux := http.NewServeMux()
-  mux.HandleFunc("/job", handlers.PostJob)
-  loggedMux := handlers.CommonLogger(mux)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/job", handlers.PostJob)
+	loggedMux := handlers.CommonLogger(mux)
 	port := 8080
 	log.Printf("Server started on port %d", port)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), loggedMux))

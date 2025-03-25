@@ -59,7 +59,7 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Error during spawning job %d: %v", job.Id, err)
 			return
 		}
-    log.Printf("Job %d spawned", job.Id)
+		log.Printf("Job %d spawned", job.Id)
 		defer func() {
 			if err := job.Vm.Kill(); err != nil {
 				log.Printf("Error during killing job %d: %v", job.Id, err)
@@ -70,7 +70,7 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 			log.Printf("Error during executing script on job %d: %v", job.Id, err)
 			return
 		}
-    log.Printf("Job %d finished", job.Id)
+		log.Printf("Job %d finished", job.Id)
 	}()
 	w.WriteHeader(http.StatusCreated)
 }

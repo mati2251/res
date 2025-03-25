@@ -2,6 +2,8 @@ package vm
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"os/exec"
 	"time"
@@ -63,6 +65,17 @@ func NewVM() *VirtualMachine {
 	}
 }
 
+func close(closer io.Closer) {
+  err := closer.Close()
+  if err != nil {
+    log.Printf("failed to close: %v", err)
+  }
+}
+
+func closeIgnore(closer io.Closer) {
+  _ = closer.Close()
+}
+
 // TODO: Implement custom dir for scripts per vm
 // TODO: Port per open port
 func (vm *VirtualMachine) Spawn() error {
@@ -109,13 +122,13 @@ func (j *Job) ExecScript() error {
 	if err != nil {
 		return fmt.Errorf("failed to dial: %v", err)
 	}
-	defer client.Close()
+	defer close(client)
 
 	session, err := client.NewSession()
 	if err != nil {
 		return fmt.Errorf("failed to create session: %v", err)
 	}
-	defer session.Close()
+	defer closeIgnore(session)
 	err = session.Run("mount -t 9p -o trans=virtio hostshare /mnt/share")
 	if err != nil {
 		return fmt.Errorf("failed to mount: %v", err)
@@ -133,15 +146,18 @@ func (j *Job) ExecScript() error {
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %v", err)
 	}
-	defer logFile.Close()
+	defer close(logFile)
 	session.Stdout = logFile
 	session.Stderr = logFile
 	stdin, err := session.StdinPipe()
+  if err != nil {
+    return fmt.Errorf("failed to get stdin: %v", err)
+  }
 	err = session.Run(fmt.Sprintf("/mnt/share/%s", j.Script))
 	if err != nil {
 		return fmt.Errorf("failed to run script: %v", err)
 	}
-	stdin.Close()
+  _ = stdin.Close()
 	return nil
 }
 

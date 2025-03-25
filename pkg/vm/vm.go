@@ -11,10 +11,35 @@ import (
 
 var jobCounter, vmCounter int64 = 0, 0
 
+type JobFile = string
+
+const (
+	Log JobFile = "log.txt"
+)
+
 type Job struct {
-	Id     int64           `json:"id"`
-	Script string          `json:"script"`
-	Vm     *VirtualMachine `json:"vm"`
+	Id      int64           `json:"id"`
+	Script  string          `json:"script"`
+	Vm      *VirtualMachine `json:"vm"`
+	baseDir string
+}
+
+func NewJob(script string) *Job {
+	jobCounter++
+	return &Job{
+		Id:      jobCounter,
+		Script:  script,
+		baseDir: "/tmp",
+		Vm:      NewVM(),
+	}
+}
+
+func (job *Job) BaseDir() string {
+  return fmt.Sprintf("%s/%d", job.baseDir, job.Id)
+}
+
+func (job *Job) FilePath(file JobFile) string {
+	return fmt.Sprintf("%s/%d/%s", job.baseDir, job.Id, file)
 }
 
 type VirtualMachine struct {
@@ -24,15 +49,6 @@ type VirtualMachine struct {
 	Cpus   int    `json:"cpus"`
 	Port   int    `json:"port"`
 	cmd    *exec.Cmd
-}
-
-func NewJob(script string) *Job {
-  jobCounter++
-  return &Job{
-    Id:     jobCounter,
-    Script: script,
-    Vm:     NewVM(),
-  }
 }
 
 func NewVM() *VirtualMachine {
@@ -49,7 +65,7 @@ func NewVM() *VirtualMachine {
 
 // TODO: Implement custom dir for scripts per vm
 // TODO: Port per open port
-func Spawn(vm *VirtualMachine) error {
+func (vm *VirtualMachine) Spawn() error {
 	qemu_args := []string{
 		"-m", fmt.Sprint(vm.Memory),
 		"-hda", vm.Image,
@@ -72,7 +88,7 @@ func Spawn(vm *VirtualMachine) error {
 }
 
 // TODO: implement custom timeout
-func ExecScript(vm *VirtualMachine, script string) error {
+func (j *Job) ExecScript() error {
 	config := &ssh.ClientConfig{
 		User: "root",
 		Auth: []ssh.AuthMethod{
@@ -84,7 +100,7 @@ func ExecScript(vm *VirtualMachine, script string) error {
 	var client *ssh.Client
 	var err error
 	for range 10 {
-		client, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", vm.Port), config)
+		client, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", j.Vm.Port), config)
 		if err == nil {
 			break
 		}
@@ -109,10 +125,19 @@ func ExecScript(vm *VirtualMachine, script string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session: %v", err)
 	}
-	session.Stdout = os.Stdout
-	session.Stderr = os.Stderr
+  err = os.MkdirAll(j.BaseDir(), 0755)
+  if err != nil {
+    return fmt.Errorf("failed to create base dir: %v", err)
+  }
+	logFile, err := os.Create(j.FilePath(Log))
+  if err != nil {
+    return fmt.Errorf("failed to create log file: %v", err)
+  }
+	defer logFile.Close()
+	session.Stdout = logFile
+	session.Stderr = logFile
 	stdin, err := session.StdinPipe()
-	err = session.Run(fmt.Sprintf("/mnt/share/%s", script))
+	err = session.Run(fmt.Sprintf("/mnt/share/%s", j.Script))
 	if err != nil {
 		return fmt.Errorf("failed to run script: %v", err)
 	}
@@ -120,7 +145,7 @@ func ExecScript(vm *VirtualMachine, script string) error {
 	return nil
 }
 
-func Kill(vm *VirtualMachine) error {
+func (vm *VirtualMachine) Kill() error {
 	err := vm.cmd.Process.Kill()
 	if err != nil {
 		return fmt.Errorf("failed to kill vm: %v", err)

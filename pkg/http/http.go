@@ -8,30 +8,30 @@ import (
 )
 
 type ResponseWriterMiddleware struct {
-  http.ResponseWriter
-  statusCode int
-  contentLength int
+	http.ResponseWriter
+	statusCode    int
+	contentLength int
 }
 
 func (rwm *ResponseWriterMiddleware) WriteHeader(statusCode int) {
-  rwm.statusCode = statusCode
-  rwm.ResponseWriter.WriteHeader(statusCode)
+	rwm.statusCode = statusCode
+	rwm.ResponseWriter.WriteHeader(statusCode)
 }
 
 func (rwm *ResponseWriterMiddleware) Write(b []byte) (int, error) {
-  if rwm.statusCode == 0 {
-    rwm.statusCode = http.StatusOK
-  }
-  if rwm.contentLength == 0 {
-    rwm.contentLength += len(b)
-  }
-  return rwm.ResponseWriter.Write(b)
+	if rwm.statusCode == 0 {
+		rwm.statusCode = http.StatusOK
+	}
+	if rwm.contentLength == 0 {
+		rwm.contentLength += len(b)
+	}
+	return rwm.ResponseWriter.Write(b)
 }
 
 func CommonLogger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-    rwm := &ResponseWriterMiddleware{w, 0, 0}
+		rwm := &ResponseWriterMiddleware{w, 0, 0}
 		next.ServeHTTP(rwm, r)
 		log.Printf("%s - - [%s] \"%s %s %s\" %d %d",
 			r.RemoteAddr,
@@ -39,8 +39,8 @@ func CommonLogger(next http.Handler) http.Handler {
 			r.Method,
 			r.URL.Path,
 			r.Proto,
-      rwm.statusCode,
-      rwm.contentLength,
+			rwm.statusCode,
+			rwm.contentLength,
 		)
 	})
 }
@@ -54,19 +54,23 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 
 	job := vm.NewJob("script.sh")
 	go func() {
-		err := vm.Spawn(job.Vm)
+		err := job.Vm.Spawn()
 		if err != nil {
-      log.Printf("Error during spawning job %d: %v", job.Id, err)
+			log.Printf("Error during spawning job %d: %v", job.Id, err)
 			return
 		}
-		if err := vm.ExecScript(job.Vm, "script.sh"); err != nil {
-      log.Printf("Error during executing script on job %d: %v", job.Id, err)
+    log.Printf("Job %d spawned", job.Id)
+		defer func() {
+			if err := job.Vm.Kill(); err != nil {
+				log.Printf("Error during killing job %d: %v", job.Id, err)
+				return
+			}
+		}()
+		if err := job.ExecScript(); err != nil {
+			log.Printf("Error during executing script on job %d: %v", job.Id, err)
 			return
 		}
-		if err := vm.Kill(job.Vm); err != nil {
-      log.Printf("Error during killing job %d: %v", job.Id, err)
-			return
-		}
+    log.Printf("Job %d finished", job.Id)
 	}()
 	w.WriteHeader(http.StatusCreated)
 }

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"res/pkg/vm"
@@ -52,6 +53,8 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+
 	job := vm.NewJob("script.sh")
 	go func() {
 		err := job.Vm.Spawn()
@@ -72,7 +75,12 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Job %d finished", job.Id)
 	}()
+	jobJson, err := json.Marshal(job)
+	if err != nil {
+		log.Printf("Error during marshalling job %d: %v", job.Id, err)
+	}
 	w.WriteHeader(http.StatusCreated)
+	w.Write(jobJson)
 }
 
 func GetJob(w http.ResponseWriter, r *http.Request) {

@@ -66,14 +66,14 @@ func NewVM() *VirtualMachine {
 }
 
 func close(closer io.Closer) {
-  err := closer.Close()
-  if err != nil {
-    log.Printf("failed to close: %v", err)
-  }
+	err := closer.Close()
+	if err != nil {
+		log.Printf("failed to close: %v", err)
+	}
 }
 
 func closeIgnore(closer io.Closer) {
-  _ = closer.Close()
+	_ = closer.Close()
 }
 
 // TODO: Implement custom dir for scripts per vm
@@ -150,14 +150,14 @@ func (j *Job) ExecScript() error {
 	session.Stdout = logFile
 	session.Stderr = logFile
 	stdin, err := session.StdinPipe()
-  if err != nil {
-    return fmt.Errorf("failed to get stdin: %v", err)
-  }
+	if err != nil {
+		return fmt.Errorf("failed to get stdin: %v", err)
+	}
 	err = session.Run(fmt.Sprintf("/mnt/share/%s", j.Script))
 	if err != nil {
 		return fmt.Errorf("failed to run script: %v", err)
 	}
-  _ = stdin.Close()
+	_ = stdin.Close()
 	return nil
 }
 

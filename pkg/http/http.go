@@ -5,8 +5,33 @@ import (
 	"log"
 	"net/http"
 	"res/pkg/vm"
+	"strings"
 	"time"
 )
+
+var	acceptedContentType = "application/json";
+
+func negotiateContentType(r *http.Request) bool {
+	acceptedRaw := r.Header.Get("Accept")
+	accepted := strings.SplitSeq(acceptedRaw, ",")
+	for accept := range accepted {
+		withPriority := strings.Split(accept, ";")
+		if len(withPriority) < 1 {
+			continue
+		}
+		acceptedTuple := strings.Split(withPriority[0], "/")
+		if len(acceptedTuple) < 2 {
+			continue
+		}
+		if acceptedTuple[0] == "*" {
+			return true
+		}
+		if acceptedTuple[0] == "application" && (acceptedTuple[1] == "*" || acceptedTuple[1] == "json") {
+			return true
+		}
+	}
+	return false
+}
 
 type ResponseWriterMiddleware struct {
 	http.ResponseWriter
@@ -50,6 +75,11 @@ func CommonLogger(next http.Handler) http.Handler {
 func PostJob(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	
+	if !negotiateContentType(r) {
+		w.WriteHeader(http.StatusNotAcceptable)
 		return
 	}
 

@@ -10,6 +10,7 @@ import (
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/job", handlers.PostJob)
+	mux.HandleFunc("/job/{id}", handlers.Job)
 	loggedMux := handlers.CommonLogger(mux)
 	port := 8080
 	log.Printf("Server started on port %d", port)

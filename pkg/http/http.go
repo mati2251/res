@@ -5,11 +5,12 @@ import (
 	"log"
 	"net/http"
 	"res/pkg/vm"
+	"strconv"
 	"strings"
 	"time"
 )
 
-var	acceptedContentType = "application/json";
+var acceptedContentType = "application/json"
 
 func negotiateContentType(r *http.Request) bool {
 	acceptedRaw := r.Header.Get("Accept")
@@ -61,7 +62,7 @@ func CommonLogger(next http.Handler) http.Handler {
 		next.ServeHTTP(rwm, r)
 		log.Printf("%s - - [%s] \"%s %s %s\" %d %d",
 			r.RemoteAddr,
-			start.Format("02/Jan/2006:15:04:05 -0700"),
+			start.Format(time.DateTime),
 			r.Method,
 			r.URL.Path,
 			r.Proto,
@@ -71,13 +72,17 @@ func CommonLogger(next http.Handler) http.Handler {
 	})
 }
 
+func Job(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		GetJob(w, r)
+	default:
+		w.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
 // TODO add checking if the sources is available
 func PostJob(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-	
 	if !negotiateContentType(r) {
 		w.WriteHeader(http.StatusNotAcceptable)
 		return
@@ -86,6 +91,13 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	job := vm.NewJob("script.sh")
+
+	err := job.CreateSpecFile()
+	if err != nil {
+		log.Printf("Error during creating spec file for job %d: %v", job.Id, err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
 	go func() {
 		err := job.Vm.Spawn()
 		if err != nil {
@@ -105,6 +117,7 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Job %d finished", job.Id)
 	}()
+
 	jobJson, err := json.Marshal(job)
 	if err != nil {
 		log.Printf("Error during marshalling job %d: %v", job.Id, err)
@@ -114,49 +127,28 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetJob(w http.ResponseWriter, r *http.Request) {
-}
+	if !negotiateContentType(r) {
+		w.WriteHeader(http.StatusNotAcceptable)
+		return
+	}
 
-func CancleJob(w http.ResponseWriter, r *http.Request) {
-}
+	jobIdRaw := r.PathValue("id")
+	if jobIdRaw == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-func GetJobLogs(w http.ResponseWriter, r *http.Request) {
-}
+	jobId, err := strconv.ParseInt(jobIdRaw, 10, 64)
 
-func GetJobs(w http.ResponseWriter, r *http.Request) {
-}
+	job, err := vm.JobFromSpecFile(int(jobId))
+	if err != nil {
+		log.Printf("Error during getting job %s: %v", jobIdRaw, err)
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
 
-func GetArtifact(w http.ResponseWriter, r *http.Request) {
-}
-
-func PostArtifact(w http.ResponseWriter, r *http.Request) {
-}
-
-func DeleteArtifact(w http.ResponseWriter, r *http.Request) {
-}
-
-func PutArtifact(w http.ResponseWriter, r *http.Request) {
-}
-
-func GetArtifacts(w http.ResponseWriter, r *http.Request) {
-}
-
-func PostVM(w http.ResponseWriter, r *http.Request) {
-}
-
-func GetVM(w http.ResponseWriter, r *http.Request) {
-}
-
-func DeleteVM(w http.ResponseWriter, r *http.Request) {
-}
-
-func GetImage(w http.ResponseWriter, r *http.Request) {
-}
-
-func PostImage(w http.ResponseWriter, r *http.Request) {
-}
-
-func DeleteImage(w http.ResponseWriter, r *http.Request) {
-}
-
-func GetImages(w http.ResponseWriter, r *http.Request) {
+	err = json.NewEncoder(w).Encode(job)
+	if err != nil {
+		log.Printf("Error during encoding job %s: %v", jobIdRaw, err)
+	}
 }

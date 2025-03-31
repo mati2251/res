@@ -1,6 +1,7 @@
 package vm
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -16,7 +17,8 @@ var jobCounter, vmCounter int64 = 0, 0
 type JobFile = string
 
 const (
-	Log JobFile = "log.txt"
+	Log  JobFile = "log.txt"
+	Spec JobFile = "spec.json"
 )
 
 type Job struct {
@@ -42,6 +44,39 @@ func (job *Job) BaseDir() string {
 
 func (job *Job) FilePath(file JobFile) string {
 	return fmt.Sprintf("%s/%d/%s", job.baseDir, job.Id, file)
+}
+
+func filePath(id int, file JobFile) string {
+	return fmt.Sprintf("/tmp/%d/%s", id, file)
+}
+
+func (job *Job) CreateSpecFile() error {
+	specFile, err := os.Create(job.FilePath(Spec))
+	if err != nil {
+		return fmt.Errorf("failed to create spec file: %v", err)
+	}
+	defer close(specFile)
+	err = json.NewEncoder(specFile).Encode(job)
+	if err != nil {
+		return fmt.Errorf("failed to encode spec file: %v", err)
+	}
+	return nil
+}
+
+func JobFromSpecFile(id int) (*Job, error) {
+	path := filePath(id, Spec)
+	specFile, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open spec file: %v", err)
+	}
+	defer close(specFile)
+	job := &Job{}
+	err = json.NewDecoder(specFile).Decode(job)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode spec file: %v", err)
+	}
+	job.baseDir = "/tmp"
+	return job, nil
 }
 
 type VirtualMachine struct {

@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"res/pkg/config"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -33,7 +34,7 @@ func NewJob(script string) *Job {
 	return &Job{
 		Id:      jobCounter,
 		Script:  script,
-		baseDir: "/tmp",
+		baseDir: config.Get().BaseDir,
 		Vm:      NewVM(),
 	}
 }
@@ -47,7 +48,7 @@ func (job *Job) FilePath(file JobFile) string {
 }
 
 func filePath(id int, file JobFile) string {
-	return fmt.Sprintf("/tmp/%d/%s", id, file)
+	return fmt.Sprintf("/%s/%d/%s", config.Get().BaseDir, id, file)
 }
 
 func (job *Job) CreateSpecFile() error {
@@ -75,7 +76,7 @@ func JobFromSpecFile(id int) (*Job, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode spec file: %v", err)
 	}
-	job.baseDir = "/tmp"
+	job.baseDir = config.Get().BaseDir
 	return job, nil
 }
 

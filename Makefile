@@ -1,10 +1,13 @@
-sources := $(wildcard pkg/*/*.go) $(wildcard cmd/*.go)
+sources :=  $(wildcard pkg/*/*.go) $(wildcard cmd/*.go)
 
-res: $(sources)
+res: $(sources) pkg/db/db.go
 	go build -o res ./cmd/...
 
 .PHONY: res
 build: res
+
+pkg/db/db.go:
+	sqlc -f db/sqlc.yaml generate
 
 .config.yaml:
 	cp .config.yaml.example .config.yaml
@@ -12,6 +15,14 @@ build: res
 .PHONY: dev
 dev: .config.yaml
 	go run ./cmd/... $(ARGS)
+
+.PHONY: dev-db
+dev-db: .config.yaml
+	apptainer instance start docker://postgres postgres
+
+.PHONY: dev-db-stop
+dev-db-stop:
+	apptainer instance stop postgres
 
 .PHONY: format
 format:

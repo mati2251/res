@@ -6,7 +6,7 @@ res: $(sources) pkg/db/db.go
 .PHONY: res
 build: res
 
-pkg/db/db.go:
+pkg/db/db.go: db/schema.sql db/queries.sql db/sqlc.yaml
 	sqlc -f db/sqlc.yaml generate
 
 .config.yaml:
@@ -16,13 +16,20 @@ pkg/db/db.go:
 dev: .config.yaml
 	go run ./cmd/... $(ARGS)
 
-.PHONY: dev-db
-dev-db: .config.yaml
-	apptainer instance start docker://postgres postgres
+postgres_latest.sif:
+	apptainer pull --force docker://postgres:latest
 
-.PHONY: dev-db-stop
-dev-db-stop:
-	apptainer instance stop postgres
+.PHONY: dev-db
+dev-db: postgres_latest.sif
+	apptainer run --fakeroot --writable-tmpfs --env POSTGRES_PASSWORD=postgres postgres_latest.sif
+
+.PHONY: dev-db-schema
+dev-db-schema:
+	psql postgres postgres -h 127.0.0.1 -p 5432 -f db/schema.sql
+
+.PHONY: dev-db-cli
+dev-db-cli:
+	pgcli postgres postgres -h 127.0.0.1 -p 5432
 
 .PHONY: format
 format:

@@ -9,11 +9,12 @@ import (
 type Config struct {
 	BaseDir string `yaml:"base_dir"`
 	Port    int    `yaml:"port"`
+	DbUrl   string `yaml:"db_url"`
 }
 
 var config Config
 
-func get(path string) (Config, error) {
+func Get(path string) (Config, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return Config{}, err
@@ -25,17 +26,4 @@ func get(path string) (Config, error) {
 		return Config{}, err
 	}
 	return config, nil
-}
-
-func Set(path string) (Config, error) {
-	conf, err := get(path)
-	if err != nil {
-		return Config{}, err
-	}
-	config = conf
-	return config, nil
-}
-
-func Get() Config {
-	return config
 }

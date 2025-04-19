@@ -1,3 +1,4 @@
 res
 .config.yaml
 pkg/db/*
+postgres_latest.sif

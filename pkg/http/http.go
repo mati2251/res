@@ -1,11 +1,14 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
-	"res/pkg/vm"
-	"strconv"
+	"os"
+	"res/pkg/config"
+	"res/pkg/db"
+	"res/pkg/virtual"
 	"strings"
 	"time"
 )
@@ -72,17 +75,31 @@ func CommonLogger(next http.Handler) http.Handler {
 	})
 }
 
-func Job(w http.ResponseWriter, r *http.Request) {
+type Service struct {
+	Queries *db.Queries
+	Config  *config.Config
+	js      virtual.JobService
+}
+
+func NewService(queries *db.Queries, config *config.Config) *Service {
+	return &Service{
+		Queries: queries,
+		Config:  config,
+		js:      virtual.JobService{Config: config, Queries: queries},
+	}
+}
+
+func (s Service) Job(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		GetJob(w, r)
+		s.getJob(w, r)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 
 // TODO add checking if the sources is available
-func PostJob(w http.ResponseWriter, r *http.Request) {
+func (s Service) PostJob(w http.ResponseWriter, r *http.Request) {
 	if !negotiateContentType(r) {
 		w.WriteHeader(http.StatusNotAcceptable)
 		return
@@ -90,65 +107,97 @@ func PostJob(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
-	job := vm.NewJob("script.sh")
-
-	err := job.CreateSpecFile()
+	ctx := context.Background()
+	vm, err := s.Queries.InsertVm(ctx, db.InsertVmParams{
+		Name:   "test",
+		Memory: 1024,
+		Cpu:    1,
+		Disk:   1024,
+		Image:  "debian",
+		Port:   8080,
+	})
 	if err != nil {
-		log.Printf("Error during creating spec file for job %d: %v", job.Id, err)
+		log.Printf("Error during inserting VM: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	job, err := s.Queries.InsertJob(ctx, db.InsertJobParams{
+		VmID:     vm.ID,
+		Status:   db.VmStatusRunning,
+		BasePath: s.Config.BaseDir,
+	})
+	if err != nil {
+		log.Printf("Error during inserting job: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = os.MkdirAll(job.BasePath, 0755)
+	if err != nil {
+		log.Printf("Error during creating job directory %s: %v", job.BasePath, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = virtual.CreateSpecFile(&job)
+	if err != nil {
+		log.Printf("Error during creating spec file for job %d: %v", job.ID, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	go func() {
-		err := job.Vm.Spawn()
+		cmd, err := virtual.Spawn(&vm)
 		if err != nil {
-			log.Printf("Error during spawning job %d: %v", job.Id, err)
+			log.Printf("Error during spawning job %d: %v", job.ID, err)
 			return
 		}
-		log.Printf("Job %d spawned", job.Id)
+		log.Printf("Job %d spawned", job.ID)
 		defer func() {
-			if err := job.Vm.Kill(); err != nil {
-				log.Printf("Error during killing job %d: %v", job.Id, err)
-				return
+			log.Printf("Job %d killed %d", job.ID, cmd.Process.Pid)
+			if err := cmd.Process.Signal(os.Kill); err != nil {
+				log.Printf("Error during killing job %d: %v", job.ID, err)
 			}
 		}()
-		if err := job.ExecScript(); err != nil {
-			log.Printf("Error during executing script on job %d: %v", job.Id, err)
+		if err := virtual.ExecScript(&job, &vm); err != nil {
+			log.Printf("Error during executing script on job %d: %v", job.ID, err)
 			return
 		}
-		log.Printf("Job %d finished", job.Id)
+		log.Printf("Job %d finished", job.ID)
 	}()
 
 	jobJson, err := json.Marshal(job)
 	if err != nil {
-		log.Printf("Error during marshalling job %d: %v", job.Id, err)
+		log.Printf("Error during marshalling job %d: %v", job.ID, err)
 	}
 	w.WriteHeader(http.StatusCreated)
 	w.Write(jobJson)
 }
 
-func GetJob(w http.ResponseWriter, r *http.Request) {
-	if !negotiateContentType(r) {
-		w.WriteHeader(http.StatusNotAcceptable)
-		return
-	}
-
-	jobIdRaw := r.PathValue("id")
-	if jobIdRaw == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	jobId, err := strconv.ParseInt(jobIdRaw, 10, 64)
-
-	job, err := vm.JobFromSpecFile(int(jobId))
-	if err != nil {
-		log.Printf("Error during getting job %s: %v", jobIdRaw, err)
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	err = json.NewEncoder(w).Encode(job)
-	if err != nil {
-		log.Printf("Error during encoding job %s: %v", jobIdRaw, err)
-	}
+func (s Service) getJob(w http.ResponseWriter, r *http.Request) {
+	// if !negotiateContentType(r) {
+	// 	w.WriteHeader(http.StatusNotAcceptable)
+	// 	return
+	// }
+	//
+	// jobIdRaw := r.PathValue("id")
+	// if jobIdRaw == "" {
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// 	return
+	// }
+	//
+	// jobId, err := strconv.ParseInt(jobIdRaw, 10, 64)
+	//
+	// job, err := s.js.JobFromSpecFile(int(jobId))
+	// if err != nil {
+	// 	log.Printf("Error during getting job %s: %v", jobIdRaw, err)
+	// 	w.WriteHeader(http.StatusNotFound)
+	// 	return
+	// }
+	//
+	// err = json.NewEncoder(w).Encode(job)
+	// if err != nil {
+	// 	log.Printf("Error during encoding job %s: %v", jobIdRaw, err)
+	// }
 }

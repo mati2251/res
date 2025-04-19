@@ -1,2 +1,3 @@
 base_dir: /tmp
 port: 2000
+db_url: "postgresql://postgres:password@localhost:5432/postgres"

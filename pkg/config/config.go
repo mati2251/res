@@ -8,8 +8,6 @@ import (
 
 type Config struct {
 	BaseDir string `yaml:"base_dir"`
-	Port    int    `yaml:"port"`
-	DbUrl   string `yaml:"db_url"`
 }
 
 var config Config

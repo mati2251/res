@@ -1,13 +1,14 @@
 sources :=  $(wildcard pkg/*/*.go) $(wildcard cmd/*.go)
 
-res: $(sources) pkg/db/db.go
+res: $(sources)
 	go build -o res ./cmd/...
 
 .PHONY: res
 build: res
 
-pkg/db/db.go: db/schema.sql db/queries.sql db/sqlc.yaml
-	sqlc -f db/sqlc.yaml generate
+.PHONY: test
+test:
+	go test -v ./...
 
 .config.yaml:
 	cp .config.yaml.example .config.yaml
@@ -18,18 +19,6 @@ dev: .config.yaml
 
 postgres_latest.sif:
 	apptainer pull --force docker://postgres:latest
-
-.PHONY: dev-db
-dev-db: postgres_latest.sif
-	apptainer run --fakeroot --writable-tmpfs --env POSTGRES_PASSWORD=postgres postgres_latest.sif
-
-.PHONY: dev-db-schema
-dev-db-schema:
-	psql postgres postgres -h 127.0.0.1 -p 5432 -f db/schema.sql
-
-.PHONY: dev-db-cli
-dev-db-cli:
-	pgcli postgres postgres -h 127.0.0.1 -p 5432
 
 .PHONY: format
 format:

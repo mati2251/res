@@ -2,3 +2,4 @@ res
 .config.yaml
 pkg/db/*
 postgres_latest.sif
+test/debian.qcow2

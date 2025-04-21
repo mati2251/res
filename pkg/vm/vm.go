@@ -3,12 +3,11 @@ package vm
 import (
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"res/pkg/config"
+	"res/pkg/log"
 	"strconv"
 	"syscall"
 	"time"
@@ -17,17 +16,11 @@ import (
 )
 
 const (
-	Log    JobFile = "log.txt"
-	Spec   JobFile = "spec.json"
 	Pid    JobFile = "qemu.pid"
 	Script JobFile = "script"
 )
 
 type JobFile = string
-
-type JobService struct {
-	Config *config.Config
-}
 
 type JobQuery struct {
 	Script   string `json:"script"`
@@ -82,7 +75,7 @@ func getFreePort() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to listen on address: %v", err)
 	}
-	defer close(ln)
+	defer closeIgnore(ln)
 	return ln.Addr().(*net.TCPAddr).Port, nil
 }
 
@@ -90,19 +83,10 @@ func (j Job) filePath(fileType JobFile) string {
 	return fmt.Sprintf("%s/%s", j.Query.BasePath, fileType)
 }
 
-func close(closer io.Closer) {
-	err := closer.Close()
-	if err != nil {
-		log.Printf("failed to close: %v", err)
-	}
-}
-
 func closeIgnore(closer io.Closer) {
 	_ = closer.Close()
 }
 
-// TODO: Implement custom dir for scripts per vm
-// TODO: Port per open port
 func (j Job) Spawn() error {
 	qemu_args := []string{
 		"-m", fmt.Sprint(j.Query.Memory),
@@ -133,7 +117,7 @@ func (j Job) Kill() error {
 	if err != nil {
 		return fmt.Errorf("failed to open pid file: %v", err)
 	}
-	defer close(file)
+	defer closeIgnore(file)
 	pidRaw, err := io.ReadAll(file)
 	if err != nil {
 		return fmt.Errorf("failed to read pid file: %v", err)
@@ -155,12 +139,12 @@ func (j Job) copyScript() (JobFile, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to create script file: %v", err)
 	}
-	defer close(dst)
+	defer closeIgnore(dst)
 	src, err := os.Open(j.Query.Script)
 	if err != nil {
 		return "", fmt.Errorf("failed to open script file: %v", err)
 	}
-	defer close(src)
+	defer closeIgnore(src)
 	_, err = io.Copy(dst, src)
 	if err != nil {
 		return "", fmt.Errorf("failed to copy script file: %v", err)
@@ -173,7 +157,7 @@ func (j Job) copyScript() (JobFile, error) {
 }
 
 // TODO: implement custom timeout
-func (j Job) ExecScript() error {
+func (j Job) ExecScript(logger log.Logger) error {
 	filename, err := j.copyScript()
 	if err != nil {
 		return fmt.Errorf("failed to copy script: %v", err)
@@ -188,7 +172,7 @@ func (j Job) ExecScript() error {
 	}
 
 	var client *ssh.Client
-	for range 10 {
+	for range 15 {
 		client, err = ssh.Dial("tcp", fmt.Sprintf("localhost:%d", j.port), config)
 		if err == nil {
 			break
@@ -198,7 +182,7 @@ func (j Job) ExecScript() error {
 	if err != nil {
 		return fmt.Errorf("failed to dial: %v", err)
 	}
-	defer close(client)
+	defer closeIgnore(client)
 
 	session, err := client.NewSession()
 	if err != nil {
@@ -218,21 +202,17 @@ func (j Job) ExecScript() error {
 	if err != nil {
 		return fmt.Errorf("failed to create base dir: %v", err)
 	}
-	logFile, err := os.Create(j.filePath(Log))
-	if err != nil {
-		return fmt.Errorf("failed to create log file: %v", err)
-	}
-	defer close(logFile)
-	session.Stdout = logFile
-	session.Stderr = logFile
-	stdin, err := session.StdinPipe()
-	if err != nil {
-		return fmt.Errorf("failed to get stdin: %v", err)
-	}
+	session.Stdout = logger.Writer(log.LevelStdout)
+	session.Stderr = logger.Writer(log.LevelStderr)
 	err = session.Run(fmt.Sprintf("/mnt/share/%s", filename))
 	if err != nil {
-		return fmt.Errorf("failed to run script: %v", err)
+		if exitErr, ok := err.(*ssh.ExitError); ok {
+			logger.Printf(log.LevelCode, "%d", exitErr.ExitStatus())
+			return nil
+		} else {
+			return fmt.Errorf("failed to wait for session: %v", err)
+		}
 	}
-	_ = stdin.Close()
+	logger.Printf(log.LevelCode, "0")
 	return nil
 }

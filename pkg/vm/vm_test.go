@@ -20,12 +20,11 @@ func TestFilePath(t *testing.T) {
 			BasePath: "/tmp",
 		},
 	}
-	path := job.filePath(Spec)
+	path := job.filePath(Pid)
 	if path == "" {
 		t.Fatalf("expected a valid file path, got empty string")
 	}
-	if path != "/tmp/spec.json" {
+	if path != "/tmp/qemu.pid" {
 		t.Fatalf("expected file path to be /tmp/spec.json, got %s", path)
 	}
 }
-

@@ -16,6 +16,7 @@ jobs:
       with:
         go-version: stable
     - name: Build
+      working-directory: ./cli
       run: make build
 
   format:
@@ -26,6 +27,7 @@ jobs:
       with:
         go-version: stable
     - name: Build
+      working-directory: ./cli
       run: make format-check
 
   lint:
@@ -38,5 +40,6 @@ jobs:
           go-version: stable
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
+        working-directory: ./cli
         with:
           version: v2.0

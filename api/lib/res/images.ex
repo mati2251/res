@@ -74,7 +74,7 @@ defmodule Res.Images do
   """
   def update_image(%Image{} = image, attrs) do
     image
-    |> Image.changeset(attrs)
+    |> Image.changeset(attrs, :update)
     |> Repo.update()
   end
 

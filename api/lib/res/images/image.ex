@@ -20,4 +20,10 @@ defmodule Res.Images.Image do
     |> validate_required([:name, :description, :status])
     |> unique_constraint(:name, name: :unique_name)
   end
+
+  def changeset(image, attrs, :update) do
+    image
+    |> cast(attrs, [:description])
+    |> validate_required([:name, :description])
+  end
 end

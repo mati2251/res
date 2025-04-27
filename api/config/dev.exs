@@ -23,7 +23,7 @@ config :res, ResWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}, port: 4000],
   check_origin: false,
   code_reloader: true,
-  debug_errors: false,
+  debug_errors: true,
   secret_key_base: "bfeKF7m8QvB4UTpEssVWENOuhKQLfOqD9sDpKuq170+AYY2D7oEGJB7wX2j+9jYq",
   watchers: []
 

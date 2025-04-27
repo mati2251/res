@@ -9,6 +9,9 @@ defmodule ResWeb.Router do
     pipe_through :api
     get "/images/", ImageController, :index
     post "/images/", ImageController, :create
-    get "/images/:name", ImageController, :show
+    get "/images/:name", ImageController, :link_show
+    delete "/images/:name", ImageController, :delete
+    get "/images/:name/properties", ImageController, :show
+    patch "/images/:name/properties", ImageController, :update
   end
 end

@@ -13,6 +13,7 @@ defmodule ResWeb.ImageController do
 
   def create(conn, %{"name" => name} = image_params) do
     image_params = Map.put(image_params, "status", "created")
+
     with {:ok, %Image{} = image} <- Images.create_image(image_params) do
       conn
       |> put_status(:created)
@@ -23,22 +24,42 @@ defmodule ResWeb.ImageController do
 
   def show(conn, %{"name" => name}) do
     image = Images.get_image_by_name!(name)
-    render(conn, :show, image: image)
+
+    case image do
+      nil ->
+        {:error, :not_found}
+
+      _ ->
+        render(conn, :show, image: image)
+    end
   end
 
-  def update(conn, %{"id" => id, "image" => image_params}) do
-    image = Images.get_image!(id)
+  def update(conn, %{"name" => name} = params) do
+    image = Images.get_image_by_name!(name)
 
-    with {:ok, %Image{} = image} <- Images.update_image(image, image_params) do
+    with {:ok, %Image{} = image} <- Images.update_image(image, params) do
       render(conn, :show, image: image)
     end
   end
 
-  def delete(conn, %{"id" => id}) do
-    image = Images.get_image!(id)
+  def delete(conn, %{"name" => name}) do
+    image = Images.get_image_by_name!(name)
 
-    with {:ok, %Image{}} <- Images.delete_image(image) do
-      send_resp(conn, :no_content, "")
+    case image do
+      nil ->
+        {:error, :not_found}
+
+      _ ->
+        with {:ok, %Image{}} <- Images.delete_image(image) do
+          send_resp(conn, :no_content, "")
+        end
     end
+  end
+
+  def link_show(conn, %{"name" => name}) do
+    conn 
+    |> put_status(:moved_permanently)
+    |> put_resp_header("location", ~p"/images/#{name}/properties")
+    |> send_resp(:moved_permanently, "")
   end
 end

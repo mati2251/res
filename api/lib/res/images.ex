@@ -37,6 +37,11 @@ defmodule Res.Images do
   """
   def get_image!(id), do: Repo.get!(Image, id)
 
+  def get_image_by_name!(name) do
+    from(i in Image, where: i.name == ^name)
+    |> Repo.one()
+  end
+
   @doc """
   Creates a image.
 

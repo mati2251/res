@@ -7,6 +7,8 @@ defmodule ResWeb.Router do
 
   scope "/", ResWeb do
     pipe_through :api
+    get "/images/", ImageController, :index
     post "/images/", ImageController, :create
+    get "/images/:name", ImageController, :show
   end
 end

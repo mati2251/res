@@ -17,6 +17,7 @@ defmodule Res.Images.Image do
   def changeset(image, attrs) do
     image
     |> cast(attrs, [:name, :description, :size, :path, :status, :format])
-    |> validate_required([:name, :description, :size, :path, :status, :format])
+    |> validate_required([:name, :description, :status])
+    |> unique_constraint(:name, name: :unique_name)
   end
 end

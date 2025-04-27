@@ -11,11 +11,12 @@ defmodule ResWeb.ImageController do
     render(conn, :index, images: images)
   end
 
-  def create(conn, %{"image" => image_params}) do
+  def create(conn, image_params) do
+    image_params = Map.put(image_params, "status", "created")
     with {:ok, %Image{} = image} <- Images.create_image(image_params) do
       conn
       |> put_status(:created)
-      |> put_resp_header("location", ~p"/api/images/#{image}")
+      # |> put_resp_header("location", ~p"/images/#{name}")
       |> render(:show, image: image)
     end
   end

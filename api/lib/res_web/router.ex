@@ -3,16 +3,10 @@ defmodule ResWeb.Router do
 
   pipeline :api do
     plug :accepts, ["json"]
-    plug :error_handler
   end
 
   scope "/", ResWeb do
     pipe_through :api
-  end
-
-  def error_handler(conn, _opts) do
-    conn
-    |> put_status(:internal_server_error)
-    |> json(%{error: "Internal Server Error"})
+    post "/images/", ImageController, :create
   end
 end

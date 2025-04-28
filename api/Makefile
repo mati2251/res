@@ -1,3 +1,5 @@
+include Example.mk
+
 postgres_latest.sif:
 	apptainer pull --force docker://postgres:latest
 

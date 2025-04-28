@@ -13,5 +13,6 @@ defmodule ResWeb.Router do
     delete "/images/:name", ImageController, :delete
     get "/images/:name/properties", ImageController, :show
     patch "/images/:name/properties", ImageController, :update
+    put "/images/:name/raw", ImageController, :upload
   end
 end

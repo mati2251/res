@@ -78,6 +78,12 @@ defmodule Res.Images do
     |> Repo.update()
   end
 
+  def update_image_raw(%Image{} = image, attrs) do
+    image
+    |> Image.changeset(attrs, :update_raw)
+    |> Repo.update()
+  end
+
   @doc """
   Deletes a image.
 

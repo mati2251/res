@@ -26,4 +26,10 @@ defmodule Res.Images.Image do
     |> cast(attrs, [:description])
     |> validate_required([:name, :description])
   end
+
+  def changeset(image, attrs, :update_raw) do
+    image
+    |> cast(attrs, [:size, :path, :status, :format])
+    |> validate_required([:name, :description, :size, :path, :status, :format])
+  end
 end

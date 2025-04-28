@@ -9,7 +9,8 @@ import Config
 
 config :res,
   ecto_repos: [Res.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  base_dir: File.cwd!() <> "/.tmp/"
 
 # Configures the endpoint
 config :res, ResWeb.Endpoint,

@@ -67,7 +67,7 @@ defmodule ResWeb.ImageController do
     |> send_resp(:moved_permanently, "")
   end
 
-  def upload(conn, %{"name" => name, "data" => %Plug.Upload{path: path, filename: filename}}) do
+  def upload(conn, %{"name" => name, "data" => %Plug.Upload{path: path, filename: filename, content_type: format}}) do
     image = Images.get_image_by_name!(name)
 
     case image do
@@ -105,7 +105,7 @@ defmodule ResWeb.ImageController do
                  "path" => image_file,
                  "size" => File.stat!(image_file).size,
                  "status" => "uploaded",
-                 "format" => Path.extname(filename)
+                 "format" => String.replace(format, "application/x-", "")
                }) do
           conn
           |> put_status(:ok)

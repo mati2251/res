@@ -26,4 +26,4 @@ patch-image-properties:
 put-image-raw:
 	curl -L -i -X PUT ${URL}/images/${EXAMPLE_IMAGE}/raw \
 	-H 'Content-Type: multipart/form-data' \
-	--compressed -F "data=@/home/mateusz/Images/qemu/debian/clean-ssh.qcow2.zst"
+	--compressed -F "data=@/home/mateusz/Images/qemu/debian/clean-ssh.qcow2.zst;type=application/x-qcow2"

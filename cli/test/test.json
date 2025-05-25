@@ -1,7 +1,0 @@
-{
-  "script": "test/test.sh",
-  "memory": 1024,
-  "cpu": 1,
-  "image": "test/debian.qcow2",
-  "base_path": "/tmp/test"
-}

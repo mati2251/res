@@ -11,3 +11,11 @@ $(VENV)/bin/activate:
 .PHONY: clean
 clean:
 	rm -rf $(VENV)
+
+.PHONY: run
+run: 
+	${VENV}/bin/uvicorn main:app --reload
+
+.PHONY: freeze
+freeze: venv
+	${PIP} freeze > requirements.txt

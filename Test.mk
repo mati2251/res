@@ -34,3 +34,13 @@ image-list-page-2:
 image-list-format:
 	curl -X GET http://$(HOST)/images/ | jq .
 
+job-post:
+	curl -X POST -i http://$(HOST)/jobs/
+
+JOB_ID = 1
+
+job-put-properties:
+	curl -H 'Content-type: application/json' -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/properties -d '{"image": "debian"}'
+
+job-get:
+	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/

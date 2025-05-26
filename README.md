@@ -15,7 +15,5 @@ This is a simple HTTP service for execute scripts in apptainer.
 | `/jobs/{id}/log` | Get job logs | ❌| ❌ | ❌| ❌|
 | `/jobs/{id}/artifacts` | Get list of job artifacts properties | ❌| ❌ | ❌| Delete job artifacts |
 | `/jobs/{id}/artifacts/data` | Get job artifacts data | ❌| ❌ | ❌| ❌|
-| `/jobs/{id}/artifacts/{id}` | Get job artifact properties | ❌| ❌ | ❌| Delete job artifact |
-| `/jobs/{id}/artifacts/{id}/data` | Get job artifact | ❌| ❌ | ❌| ❌|
 | `/pipelines` | Retrieve a list of all registered pipelines | Register a new pipeline | ❌| ❌| ❌|
 | `/pipelines/{id}` | Get pipeline properties | ❌| ❌| ❌| ❌|

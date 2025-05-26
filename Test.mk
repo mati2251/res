@@ -60,3 +60,6 @@ job-get-state:
 
 job-put-state: 
 	curl -X PUT -i "http://$(HOST)/jobs/1/state/?state=start"
+
+job-get-log:
+	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/log/

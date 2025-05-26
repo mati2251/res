@@ -73,7 +73,9 @@ def job_state(job_id: int) -> str:
     state = "ready"
     try:
         state = os.getxattr(
-            f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}", STATE_ATTR, follow_symlinks=False
+            f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}",
+            STATE_ATTR,
+            follow_symlinks=False,
         ).decode()
     except OSError:
         pass
@@ -246,10 +248,11 @@ def launch_script(job_id):
 
     properties_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}")
 
-    cmd = [f"apptainer exec --overlay {overlay_path} {image_path} {script_path};", 
-           f"setfattr --name {EXIT_CODE_ATTR} --value $? {properties_path};"
-           f"setfattr --name {STATE_ATTR} --value done {properties_path};"
-           ]
+    cmd = [
+        f"apptainer exec --overlay {overlay_path} {image_path} {script_path};",
+        f"setfattr --name {EXIT_CODE_ATTR} --value $? {properties_path};"
+        f"setfattr --name {STATE_ATTR} --value done {properties_path};",
+    ]
 
     cmd = " ".join(cmd)
     cmd = f"bash -c '{cmd}'"
@@ -259,7 +262,8 @@ def launch_script(job_id):
     log_file = os.path.abspath(f"{JOBS_STORE}/{job_id}/{LOG_FILE}")
     with open(log_file, "w") as log_f:
         subprocess.Popen(cmd, shell=True, stdout=log_f, stderr=log_f)
-    
+
+
 @router.put("/{job_id}/state/", response_model=str)
 def put_state(job_id: int, state: str):
     """
@@ -285,4 +289,23 @@ def put_state(job_id: int, state: str):
 
     return PlainTextResponse(
         status_code=200, content=state, headers={"Location": f"/jobs/{job_id}/state/"}
+    )
+
+
+@router.get("/{job_id}/log/", response_model=str)
+def get_logs(job_id: int):
+    """
+    Get job logs
+    """
+    log_path = f"{JOBS_STORE}/{job_id}/{LOG_FILE}"
+    if not os.path.exists(log_path):
+        return JSONResponse(status_code=404, content={"detail": "Log file not found"})
+
+    with open(log_path, "r") as f:
+        log_content = f.read()
+
+    return PlainTextResponse(
+        status_code=200,
+        content=log_content,
+        headers={"Location": f"/jobs/{job_id}/log/"},
     )

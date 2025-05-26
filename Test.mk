@@ -54,3 +54,9 @@ job-put-script: script.sh
 
 job-get-script:
 	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/script/
+
+job-get-state:
+	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/state/
+
+job-put-state: 
+	curl -X PUT -i "http://$(HOST)/jobs/1/state/?state=start"

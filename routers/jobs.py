@@ -1,7 +1,8 @@
-import os
 import logging
+import os
+import subprocess
 
-from fastapi import APIRouter, UploadFile, File
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel
 
@@ -12,6 +13,8 @@ router = APIRouter()
 JOBS_STORE = ".store/jobs"
 IMAGES_STORE = ".store/images"
 PROPERTIES_NAME = "properties"
+OVERLAY_DIR = "overlay"
+LOG_FILE = "job.log"
 IMAGE_NAME = "image.sif"
 SCRIPT_NAME = "script"
 IMAGE_ATTR = "user.image"
@@ -59,6 +62,24 @@ class Image(BaseModel):
     image: str
 
 
+def job_state(job_id: int) -> str:
+    state = "not ready"
+    image_path = f"{JOBS_STORE}/{job_id}/{IMAGE_NAME}"
+    if not os.path.exists(image_path):
+        return state
+    script_path = f"{JOBS_STORE}/{job_id}/{SCRIPT_NAME}"
+    if not os.path.exists(script_path):
+        return state
+    state = "ready"
+    try:
+        state = os.getxattr(
+            f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}", STATE_ATTR, follow_symlinks=False
+        ).decode()
+    except OSError:
+        pass
+    return state
+
+
 def job_from_id(job_id: int) -> Image | None:
     """
     Get job properties from the job ID.
@@ -80,22 +101,16 @@ def job_from_id(job_id: int) -> Image | None:
     with open(script_path, "r") as f:
         script = f.read().strip()
 
-    state = "not ready"
-    if image != "" and script != "":
-        state = "ready"
+    state = job_state(job_id)
+
+    properties_path = f"{job_path}/{PROPERTIES_NAME}"
 
     try:
         exit_code = int(
-            os.getxattr(job_path, EXIT_CODE_ATTR, follow_symlinks=False).decode()
+            os.getxattr(properties_path, EXIT_CODE_ATTR, follow_symlinks=False).decode()
         )
     except OSError:
         exit_code = -1
-
-    try:
-        state = os.getxattr(job_path, STATE_ATTR, follow_symlinks=False).decode()
-    except OSError:
-        pass
-
 
     return Image(
         id=job_id, state=state, script=script, exit_code=exit_code, image=image
@@ -140,6 +155,7 @@ async def update_job(job_id: int, props: ImageProperties):
         headers={"Location": f"/jobs/{job_id}"},
     )
 
+
 @router.get("/{job_id}/", response_model=Image)
 async def get_job(job_id: int):
     """
@@ -148,12 +164,13 @@ async def get_job(job_id: int):
     job = job_from_id(job_id)
     if job is None:
         return JSONResponse(status_code=404, content={"detail": "Job not found"})
-    
+
     return JSONResponse(
         status_code=200,
         content=job.model_dump(),
         headers={"Location": f"/jobs/{job_id}"},
     )
+
 
 @router.put("/{job_id}/script/", response_model=Image)
 async def update_job_script(job_id: int, file: UploadFile = File(...)):
@@ -177,6 +194,7 @@ async def update_job_script(job_id: int, file: UploadFile = File(...)):
         headers={"Location": f"/jobs/{job_id}"},
     )
 
+
 @router.get("/{job_id}/script/", response_model=str)
 async def get_job_script(job_id: int):
     """
@@ -188,12 +206,83 @@ async def get_job_script(job_id: int):
     script_path = f"{job_path}/{SCRIPT_NAME}"
     if not os.path.exists(script_path):
         return JSONResponse(status_code=404, content={"detail": "Script not found"})
-    
+
     with open(script_path, "r") as f:
         script_content = f.read()
-    
+
     return PlainTextResponse(
         status_code=200,
         content=script_content,
-        headers={"Location": f"/jobs/{job_id}/script/"}
+        headers={"Location": f"/jobs/{job_id}/script/"},
+    )
+
+
+@router.get("/{job_id}/state/", response_model=str)
+def get_state(job_id: int):
+    """
+    Get the state of a job.
+    """
+    state = job_state(job_id)
+    return PlainTextResponse(
+        status_code=200, content=state, headers={"Location": f"/jobs/{job_id}/state/"}
+    )
+
+
+class LaunchException(Exception):
+    def __init__(self, message: str):
+        super().__init__(message)
+        self.message = message
+
+
+def launch_script(job_id):
+    script_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{SCRIPT_NAME}")
+    if not os.path.exists(script_path):
+        raise LaunchException("Script not found")
+    image_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{IMAGE_NAME}")
+    if not os.path.exists(image_path):
+        raise LaunchException("Image not found")
+    overlay_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{OVERLAY_DIR}")
+    os.makedirs(overlay_path, exist_ok=True)
+
+    properties_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}")
+
+    cmd = [f"apptainer exec --overlay {overlay_path} {image_path} {script_path};", 
+           f"setfattr --name {EXIT_CODE_ATTR} --value $? {properties_path};"
+           f"setfattr --name {STATE_ATTR} --value done {properties_path};"
+           ]
+
+    cmd = " ".join(cmd)
+    cmd = f"bash -c '{cmd}'"
+
+    logger.info(f"Launching job {job_id} with command: {cmd}")
+
+    log_file = os.path.abspath(f"{JOBS_STORE}/{job_id}/{LOG_FILE}")
+    with open(log_file, "w") as log_f:
+        subprocess.Popen(cmd, shell=True, stdout=log_f, stderr=log_f)
+    
+@router.put("/{job_id}/state/", response_model=str)
+def put_state(job_id: int, state: str):
+    """
+    Set the state of a job. Available states to set are: "start", "stop"
+    """
+    avalible_states = ["start", "stop"]
+    if state not in avalible_states:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"State must be one of {avalible_states}"},
+        )
+    job_path = f"{JOBS_STORE}/{job_id}"
+    if not os.path.exists(job_path):
+        return JSONResponse(status_code=404, content={"detail": "Job not found"})
+
+    os.setxattr(job_path, STATE_ATTR, f"{state}ed".encode(), follow_symlinks=False)
+
+    if state == "start":
+        try:
+            launch_script(job_id)
+        except LaunchException as e:
+            return JSONResponse(status_code=500, content={"detail": str(e)})
+
+    return PlainTextResponse(
+        status_code=200, content=state, headers={"Location": f"/jobs/{job_id}/state/"}
     )

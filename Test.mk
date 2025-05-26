@@ -44,3 +44,13 @@ job-put-properties:
 
 job-get:
 	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/
+
+script.sh:
+	echo "#!/bin/bash" > script.sh
+	echo "echo Hello, World!" >> script.sh
+
+job-put-script: script.sh
+	curl -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/script/ -F "file=@script.sh"
+
+job-get-script:
+	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/script/

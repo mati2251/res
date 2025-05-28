@@ -73,3 +73,10 @@ job-get-artifacts:
 
 job-get-artifacts-raw:
 	curl -X GET -i  --output artifacts.zip http://$(HOST)/jobs/$(JOB_ID)/artifacts/data
+
+jobs:
+	curl -X GET -I http://$(HOST)/jobs/
+	curl -X GET http://$(HOST)/jobs/ | jq .
+
+jobs-filter:
+	curl -X GET http://$(HOST)/jobs/?state=done | jq .

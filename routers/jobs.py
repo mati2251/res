@@ -1,13 +1,8 @@
-from dataclasses import dataclass
 import logging
 import os
-import subprocess
-import zipfile
-from io import BytesIO
 
-from fastapi import APIRouter, File, UploadFile
+from fastapi import APIRouter, UploadFile, File, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
-from pydantic import BaseModel
 import utils.job as utils
 
 logger = logging.getLogger("uvicorn.error")
@@ -24,7 +19,7 @@ async def create_job():
     return JSONResponse(
         status_code=201,
         content={
-            "job_id": max_job_id,
+            "id": max_job_id,
         },
         headers={"Location": f"/jobs/{max_job_id}"},
     )
@@ -199,3 +194,23 @@ def get_artifact_data(job_id: int):
             "Content-Type": "application/zip",
         },
     )
+
+
+@router.get("/")
+def list_jobs(
+    skip: int = Query(0, ge=0), limit: int = Query(10, gt=0), state: str = Query("")
+):
+    """
+    List all images in the store, with pagination support.
+    """
+    jobs = utils.get_jobs(state)
+    if not jobs:
+        return {"total": 0, "skip": skip, "limit": limit, "items": []}
+    total = len(jobs)
+    paginated = jobs[skip : skip + limit]
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "items": [job.model_dump() for job in paginated],
+    }

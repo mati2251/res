@@ -46,6 +46,7 @@ class ImageProperties(BaseModel):
     image: str
     artifacts: list[str] | None = None
 
+
 class FileProperties(BaseModel):
     name: str
     size: str
@@ -228,6 +229,7 @@ def set_state(job_id: int, state: str):
 
     return state
 
+
 def get_log(job_id: int) -> str:
     """
     Get the job log.
@@ -238,6 +240,7 @@ def get_log(job_id: int) -> str:
 
     with open(log_path, "r") as f:
         return f.read()
+
 
 def get_artifacts(job_id: int) -> list[FileProperties]:
     artifacts_path = f"{JOBS_STORE}/{job_id}/{ROOT_MOUNT}"
@@ -273,8 +276,8 @@ def get_artifacts(job_id: int) -> list[FileProperties]:
 
     return files
 
-def get_artifacts_raw(job_id: int) -> BytesIO:
 
+def get_artifacts_raw(job_id: int) -> BytesIO:
     artifacts_path = f"{JOBS_STORE}/{job_id}/{ROOT_MOUNT}"
     if not os.path.exists(artifacts_path):
         raise JobException("Artifacts not found")
@@ -300,3 +303,14 @@ def get_artifacts_raw(job_id: int) -> BytesIO:
 
     zip_buffer.seek(0)
     return zip_buffer
+
+
+def get_jobs(state: str) -> list[Image]:
+    jobs = []
+    for job_id in os.listdir(JOBS_STORE):
+        if job_id.isdigit():
+            job = job_from_id(int(job_id))
+            if job:
+                if state == "" or state.lower() in job.state:
+                    jobs.append(job)
+    return jobs

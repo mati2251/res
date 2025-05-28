@@ -1,6 +1,9 @@
+from dataclasses import dataclass
 import logging
 import os
 import subprocess
+import zipfile
+from io import BytesIO
 
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -12,6 +15,7 @@ router = APIRouter()
 
 JOBS_STORE = ".store/jobs"
 IMAGES_STORE = ".store/images"
+ROOT_MOUNT = "/root"
 PROPERTIES_NAME = "properties"
 OVERLAY_DIR = "overlay"
 LOG_FILE = "job.log"
@@ -121,6 +125,7 @@ def job_from_id(job_id: int) -> Image | None:
 
 class ImageProperties(BaseModel):
     image: str
+    artifacts: list[str] | None = None
 
 
 @router.put("/{job_id}/properties", response_model=Image)
@@ -145,6 +150,13 @@ async def update_job(job_id: int, props: ImageProperties):
     os.setxattr(
         properties_path, IMAGE_ATTR, props.image.encode(), follow_symlinks=False
     )
+    if props.artifacts:
+        os.setxattr(
+            properties_path,
+            "user.artifacts",
+            ",".join(props.artifacts).encode(),
+            follow_symlinks=False,
+        )
 
     job = job_from_id(job_id)
 
@@ -186,6 +198,7 @@ async def update_job_script(job_id: int, file: UploadFile = File(...)):
     with open(script_path, "wb") as f:
         content = await file.read()
         f.write(content)
+        os.chmod(script_path, 0o755)
 
     job = job_from_id(job_id)
     if job is None:
@@ -247,9 +260,11 @@ def launch_script(job_id):
     os.makedirs(overlay_path, exist_ok=True)
 
     properties_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}")
+    root_mount = os.path.abspath(f"{JOBS_STORE}/{job_id}/{ROOT_MOUNT}")
+    os.makedirs(root_mount, exist_ok=True)
 
     cmd = [
-        f"apptainer exec --overlay {overlay_path} {image_path} {script_path};",
+        f"apptainer exec -C --fakeroot --bind {script_path} --bind {root_mount}:/root/ --overlay {overlay_path} {image_path} {script_path};",
         f"setfattr --name {EXIT_CODE_ATTR} --value $? {properties_path};"
         f"setfattr --name {STATE_ATTR} --value done {properties_path};",
     ]
@@ -274,6 +289,11 @@ def put_state(job_id: int, state: str):
         return JSONResponse(
             status_code=400,
             content={"detail": f"State must be one of {avalible_states}"},
+        )
+    current_state = job_state(job_id)
+    if current_state == "not ready":
+        return JSONResponse(
+            status_code=400, content={"detail": "Job is not ready to be started"}
         )
     job_path = f"{JOBS_STORE}/{job_id}"
     if not os.path.exists(job_path):
@@ -308,4 +328,84 @@ def get_logs(job_id: int):
         status_code=200,
         content=log_content,
         headers={"Location": f"/jobs/{job_id}/log/"},
+    )
+
+class FileProperties(BaseModel):
+    name: str
+    size: str
+    type: str
+
+@router.get("/{job_id}/artifacts/", response_model=list[FileProperties])
+def get_artifacts(job_id: int):
+    """
+    Get job artifacts
+    """
+    artifacts_path = f"{JOBS_STORE}/{job_id}/{ROOT_MOUNT}"
+
+    if not os.path.exists(artifacts_path):
+        return JSONResponse(status_code=404, content={"detail": "Artifacts not found"})
+
+    artifacts_raw = ""
+
+    try:
+        artifacts_raw = os.getxattr(
+            f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}",
+            "user.artifacts",
+            follow_symlinks=False,
+        ).decode()
+    except OSError:
+        return JSONResponse(status_code=404, content={"detail": "No artifacts found"})
+
+    artifacts = artifacts_raw.split(",")
+
+    files = []
+    for artifact in artifacts:
+        artifact_path = os.path.abspath(os.path.join(artifacts_path, artifact))
+        if os.path.exists(artifact_path):
+            file_info = FileProperties(
+                name=artifact,
+                size=str(os.path.getsize(artifact_path)),
+                type=subprocess.getoutput(f"file -b --mime-type '{artifact_path}'").strip()
+            )
+            files.append(file_info)
+
+    return files
+
+
+@router.get("/{job_id}/artifacts/data")
+def get_artifact_data(job_id: int):
+    """
+    Get archive of artifacts
+    """
+    artifacts_path = f"{JOBS_STORE}/{job_id}/{ROOT_MOUNT}"
+    if not os.path.exists(artifacts_path):
+        return JSONResponse(status_code=404, content={"detail": "Artifacts not found"})
+
+    artifacts_raw = ""
+    try:
+        artifacts_raw = os.getxattr(
+            f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}",
+            "user.artifacts",
+            follow_symlinks=False,
+        ).decode()
+    except OSError:
+        return JSONResponse(status_code=404, content={"detail": "No artifacts found"})
+
+    artifacts = artifacts_raw.split(",")
+
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for artifact in artifacts:
+            artifact_path = os.path.join(artifacts_path, artifact)
+            if os.path.exists(artifact_path):
+                zip_file.write(artifact_path, arcname=artifact)
+                
+    zip_buffer.seek(0)
+    return PlainTextResponse(
+        status_code=200,
+        content=zip_buffer.getvalue(),
+        headers={
+            "Content-Disposition": f'attachment; filename="artifacts_{job_id}.zip"',
+            "Content-Type": "application/zip",
+        },
     )

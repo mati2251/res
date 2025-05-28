@@ -40,14 +40,18 @@ job-post:
 JOB_ID = 1
 
 job-put-properties:
-	curl -H 'Content-type: application/json' -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/properties -d '{"image": "debian"}'
+	curl -H 'Content-type: application/json' -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/properties -d '{"image": "debian", "artifacts": ["test", "test2"]}'
 
 job-get:
 	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/
 
 script.sh:
 	echo "#!/bin/bash" > script.sh
-	echo "echo Hello, World!" >> script.sh
+	echo "apt update -qqy" >> script.sh
+	echo "apt install -qqy neofetch" >> script.sh
+	echo "neofetch > test" >> script.sh
+	echo "echo hello > test2" >> script.sh
+	echo "neofetch" >> script.sh
 
 job-put-script: script.sh
 	curl -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/script/ -F "file=@script.sh"
@@ -63,3 +67,9 @@ job-put-state:
 
 job-get-log:
 	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/log/
+
+job-get-artifacts:
+	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/artifacts/
+
+job-get-artifacts-raw:
+	curl -X GET -i  --output artifacts.zip http://$(HOST)/jobs/$(JOB_ID)/artifacts/data

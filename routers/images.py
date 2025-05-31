@@ -32,7 +32,7 @@ async def upload_image(name: str, request: Request, file: UploadFile = File(...)
 
     file_path = f"{IMAGE_STORE}/{name}.sif"
     request_etag = request.headers.get("ETag")
-    current_etag = ""
+    current_etag = None
     try:
         current_etag = os.getxattr(file_path, HASH_ATTR).decode("utf-8")
     except OSError:

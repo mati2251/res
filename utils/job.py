@@ -31,6 +31,7 @@ class Image(BaseModel):
     script: str
     exit_code: int
     image: str
+    artifacts: list[str]
 
 
 class LaunchException(Exception):
@@ -112,14 +113,29 @@ def job_from_id(job_id: int) -> Image | None:
 
     script = ""
     script_path = f"{job_path}/{SCRIPT_NAME}"
+
+    properties_path = f"{job_path}/{PROPERTIES_NAME}"
+    try:
+        artifacts_raw = os.getxattr(
+            properties_path, "user.artifacts", follow_symlinks=False
+        ).decode()
+        artifacts = artifacts_raw.split(",")
+    except OSError:
+        artifacts = []
+
     if not os.path.exists(script_path):
-        return Image(id=job_id, state="not ready", script="", exit_code=-1, image=image)
+        return Image(
+            id=job_id,
+            state="not ready",
+            script="",
+            exit_code=-1,
+            image=image,
+            artifacts=artifacts,
+        )
     with open(script_path, "r") as f:
         script = f.read().strip()
 
     state = job_state(job_id)
-
-    properties_path = f"{job_path}/{PROPERTIES_NAME}"
 
     try:
         exit_code = int(
@@ -129,7 +145,12 @@ def job_from_id(job_id: int) -> Image | None:
         exit_code = -1
 
     return Image(
-        id=job_id, state=state, script=script, exit_code=exit_code, image=image
+        id=job_id,
+        state=state,
+        script=script,
+        exit_code=exit_code,
+        image=image,
+        artifacts=artifacts,
     )
 
 
@@ -284,7 +305,11 @@ def set_state(job_id: int, state: str):
     if not os.path.exists(job_path):
         raise JobException("Job not found")
 
-    os.setxattr(job_path, STATE_ATTR, f"{state}ed".encode(), follow_symlinks=False)
+    properties_path = f"{job_path}/{PROPERTIES_NAME}"
+    if not os.path.exists(properties_path):
+        raise JobException("Properties file not found")
+
+    os.setxattr(properties_path, STATE_ATTR, f"{state}ed".encode(), follow_symlinks=False)
 
     return state
 

@@ -24,7 +24,7 @@ image-get-redirect:
 	curl -X GET -i http://$(HOST)/images/debian
 
 image-delete:
-	curl -X DELETE -i http://$(HOST)/images/debian
+	curl -X DELETE -i http://$(HOST)/images/debian/
 
 image-put-all:
 	for image in $(EXAMPLE_IMAGES); do \
@@ -32,13 +32,11 @@ image-put-all:
 	done
 
 image-list:
-	curl -X GET -i http://$(HOST)/images/
+	curl -X GET -I http://$(HOST)/images/
+	curl -X GET http://$(HOST)/images/ | jq .
 
 image-list-page-2:
 	curl -X GET http://$(HOST)/images/?skip=10 | jq .
-
-image-list-format:
-	curl -X GET http://$(HOST)/images/ | jq .
 
 job-post:
 	curl -X POST -i http://$(HOST)/jobs/

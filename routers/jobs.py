@@ -1,5 +1,4 @@
 import logging
-import os
 import asyncio
 
 from fastapi import APIRouter, UploadFile, File, Query, Request

@@ -2,6 +2,12 @@ HOST = localhost:8000
 DATA_STORE = .store/images/
 EXAMPLE_IMAGES = debian alpine ubuntu fedora archlinux busybox nginx redis mysql postgres python node httpd golang ruby hello-world
 
+clean:
+	sudo rm -rf .store debian_latest.sif script.sh
+
+clean-jobs:
+	sudo rm -rf .store/jobs
+
 debian_latest.sif:
 	apptainer pull docker://debian:latest
 
@@ -80,3 +86,6 @@ jobs:
 
 jobs-filter:
 	curl -X GET http://$(HOST)/jobs/?state=done | jq .
+
+pipeline:
+	curl -X POST -i http://$(HOST)/pipelines/ -H 'Content-type: application/json' -d '@pipeline.json'

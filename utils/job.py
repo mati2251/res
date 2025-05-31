@@ -1,6 +1,7 @@
 import os
 import subprocess
 import zipfile
+import asyncio
 from io import BytesIO
 import logging
 from pydantic import BaseModel
@@ -187,7 +188,7 @@ def get_script(job_id: int) -> str:
         return f.read().strip()
 
 
-def launch_script(job_id):
+async def launch(job_id):
     script_path = os.path.abspath(f"{JOBS_STORE}/{job_id}/{SCRIPT_NAME}")
     if not os.path.exists(script_path):
         raise LaunchException("Script not found")
@@ -213,8 +214,44 @@ def launch_script(job_id):
     logger.info(f"Launching job {job_id} with command: {cmd}")
 
     log_file = os.path.abspath(f"{JOBS_STORE}/{job_id}/{LOG_FILE}")
-    with open(log_file, "w") as log_f:
-        subprocess.Popen(cmd, shell=True, stdout=log_f, stderr=log_f)
+    log_f = open(log_file, "w")
+    process = await asyncio.create_subprocess_shell(
+        cmd,
+        stdout=log_f,
+        stderr=log_f,
+    )
+
+    return process, log_f
+
+
+async def wait(process, job_id, log) -> int:
+    """
+    Wait for the job to complete and return the exit code.
+    """
+    await process.communicate()
+    log.close()
+    try:
+        exit_code = int(
+            os.getxattr(
+                f"{JOBS_STORE}/{job_id}/{PROPERTIES_NAME}",
+                EXIT_CODE_ATTR,
+                follow_symlinks=False,
+            ).decode()
+        )
+    except OSError:
+        exit_code = -1
+        pass
+    logger.info(f"Job completed with exit code: {exit_code}")
+    return exit_code
+
+
+async def launch_and_wait(job_id: int) -> int:
+    """
+    Launch the job script and wait for it to complete.
+    """
+    process, log = await launch(job_id)
+    exit_code = await wait(process, job_id, log)
+    return exit_code
 
 
 def set_state(job_id: int, state: str):
@@ -314,3 +351,47 @@ def get_jobs(state: str) -> list[Image]:
                 if state == "" or state.lower() in job.state:
                     jobs.append(job)
     return jobs
+
+
+def cp_artifacts(src_job: int, dst_job: int):
+    """
+    Copy an artifact from the job's root mount to the current directory.
+    """
+    src_job_path = f"{JOBS_STORE}/{src_job}"
+    if not os.path.exists(src_job_path):
+        raise JobException("Job not found")
+
+    src_artifact_path = f"{src_job_path}/{ROOT_MOUNT}"
+    if not os.path.exists(src_artifact_path):
+        raise JobException("Artifacts not found")
+
+    dst_job_path = f"{JOBS_STORE}/{dst_job}"
+    if not os.path.exists(dst_job_path):
+        raise JobException("Destination job not found")
+
+    dst_artifact_path = f"{dst_job_path}/{ROOT_MOUNT}"
+    os.makedirs(dst_artifact_path, exist_ok=True)
+    artifacts_raw = ""
+    try:
+        artifacts_raw = os.getxattr(
+            f"{src_job_path}/{PROPERTIES_NAME}",
+            "user.artifacts",
+            follow_symlinks=False,
+        ).decode()
+    except OSError:
+        raise JobException("No artifacts found")
+
+    artifacts = artifacts_raw.split(",")
+    for artifact in artifacts:
+        src_file_path = os.path.join(src_artifact_path, artifact)
+        if os.path.exists(src_file_path):
+            dst_file_path = os.path.join(dst_artifact_path, artifact)
+            if not os.path.exists(dst_file_path):
+                os.makedirs(os.path.dirname(dst_file_path), exist_ok=True)
+                os.link(src_file_path, dst_file_path)
+            else:
+                raise JobException(
+                    f"Artifact {artifact} already exists in destination job"
+                )
+        else:
+            raise JobException(f"Artifact {artifact} not found in source job")

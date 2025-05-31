@@ -1,5 +1,6 @@
 import logging
 import os
+import asyncio
 
 from fastapi import APIRouter, UploadFile, File, Query
 from fastapi.responses import JSONResponse, PlainTextResponse
@@ -113,7 +114,7 @@ def get_state(job_id: int):
 
 
 @router.put("/{job_id}/state/", response_model=str)
-def put_state(job_id: int, state: str):
+async def put_state(job_id: int, state: str):
     """
     Set the state of a job. Available states to set are: "start", "stop"
     """
@@ -136,7 +137,7 @@ def put_state(job_id: int, state: str):
 
     if state == "start":
         try:
-            utils.launch_script(job_id)
+            asyncio.create_task(utils.launch_and_wait(job_id))
         except utils.LaunchException as e:
             return JSONResponse(status_code=500, content={"detail": str(e)})
 

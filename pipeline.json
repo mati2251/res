@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "name": "build",
+      "image": "debian",
+      "script": [
+        "!/bin/bash",
+        "set -xe",
+        "apt update -qyy",
+        "apt install -qyy libnet1-dev libpcap-dev git build-essential",
+        "git clone https://github.com/mati2251/dns-spoofing",
+        "cd dns-spoofing",
+        "make"
+      ],
+      "artifacts": [
+        "dns-spoofing/dns-spoofing"
+      ]
+    },
+    {
+      "name": "run",
+      "image": "debian",
+      "script": [
+        "!/bin/bash",
+        "set -xe",
+        "apt update -qyy",
+        "apt install -qyy libnet1 libpcap0.8",
+        "dns-spoofing/dns-spoofing || true"
+      ]
+    }
+  ]
+}

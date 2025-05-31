@@ -62,6 +62,10 @@ script.sh:
 job-put-script: script.sh
 	curl -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/script/ -F "file=@script.sh"
 
+ETAG = "e1e8095df80b663acaca3b3859fafa87a9c3172a1332103bf6cc3a7ea1a1cee0"
+job-put-script-etag: script.sh
+	curl -X PUT -i http://$(HOST)/jobs/$(JOB_ID)/script/ -H "ETag: $(ETAG)" -F "file=@script.sh"
+
 job-get-script:
 	curl -X GET -i http://$(HOST)/jobs/$(JOB_ID)/script/
 

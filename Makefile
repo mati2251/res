@@ -13,7 +13,7 @@ clean:
 	rm -rf $(VENV)
 
 .PHONY: run
-run: 
+run: venv
 	${VENV}/bin/uvicorn main:app --reload
 
 .PHONY: freeze

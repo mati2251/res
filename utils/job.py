@@ -1,6 +1,7 @@
 import os
 import subprocess
 import zipfile
+import hashlib
 import asyncio
 from io import BytesIO
 import logging
@@ -19,6 +20,7 @@ SCRIPT_NAME = "script"
 IMAGE_ATTR = "user.image"
 EXIT_CODE_ATTR = "user.exit_code"
 STATE_ATTR = "user.state"
+HASH_ATTR = "user.hash"
 
 os.makedirs(JOBS_STORE, exist_ok=True)
 
@@ -167,12 +169,32 @@ def put_script(job_id: int, script_content: bytes):
         raise JobException("Job not found")
 
     script_path = f"{job_path}/{SCRIPT_NAME}"
+
     with open(script_path, "w") as f:
+        hash = hashlib.sha256(script_content).hexdigest()
         f.write(script_content.decode())
+        os.setxattr(script_path, HASH_ATTR, hash.encode(), follow_symlinks=False)
 
     os.chmod(script_path, 0o755)
 
-    return job_from_id(job_id)
+    return job_from_id(job_id), hash
+
+
+def get_script_etag(job_id: int) -> str | None:
+    job_path = f"{JOBS_STORE}/{job_id}"
+    if not os.path.exists(job_path):
+        return None
+
+    script_path = f"{job_path}/{SCRIPT_NAME}"
+    if not os.path.exists(script_path):
+        return None
+
+    try:
+        etag = os.getxattr(script_path, HASH_ATTR, follow_symlinks=False).decode()
+    except OSError:
+        return None
+
+    return etag
 
 
 def get_script(job_id: int) -> str:

@@ -2,7 +2,7 @@ import logging
 import os
 import asyncio
 
-from fastapi import APIRouter, UploadFile, File, Query
+from fastapi import APIRouter, UploadFile, File, Query, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 import utils.job as utils
 
@@ -64,15 +64,31 @@ async def get_job(job_id: int):
 
 
 @router.put("/{job_id}/script/", response_model=utils.Image)
-async def update_job_script(job_id: int, file: UploadFile = File(...)):
+async def update_job_script(
+    job_id: int, request: Request, file: UploadFile = File(...)
+):
     """
     Update the script of a job.
     """
+    request_etag = request.headers.get("Etag")
+    script_etag = utils.get_script_etag(job_id)
+    if request_etag is None and script_etag is not None:
+        return JSONResponse(
+            status_code=428,
+            headers={"Etag": script_etag},
+            content={"detail": "Etag header is required for script update."},
+        )
+    elif request_etag and script_etag and request_etag != script_etag:
+        return JSONResponse(
+            status_code=412,
+            content={"detail": "Etag mismatch. The script has been modified."},
+        )
+
     content = await file.read()
     job = None
-
+    hash = None
     try:
-        job = utils.put_script(job_id, content)
+        job, hash = utils.put_script(job_id, content)
     except utils.JobException as e:
         return JSONResponse(status_code=404, content={"detail": str(e)})
 
@@ -81,7 +97,7 @@ async def update_job_script(job_id: int, file: UploadFile = File(...)):
     return JSONResponse(
         status_code=200,
         content=job.model_dump(),
-        headers={"Location": f"/jobs/{job_id}"},
+        headers={"Location": f"/jobs/{job_id}", "Etag": hash or ""},
     )
 
 

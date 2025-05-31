@@ -1,6 +1,10 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Query
 from fastapi.responses import FileResponse, Response
+from fastapi.responses import JSONResponse
 import os
+import hashlib
+
+from utils.job import HASH_ATTR
 
 router = APIRouter()
 
@@ -13,7 +17,7 @@ if not os.path.exists(IMAGE_STORE):
 
 
 @router.put("/{name}/raw")
-async def upload_image(name: str, file: UploadFile = File(...)):
+async def upload_image(name: str, request: Request, file: UploadFile = File(...)):
     """
     Upload a raw apptainer file.
     """
@@ -27,8 +31,32 @@ async def upload_image(name: str, file: UploadFile = File(...)):
         )
 
     file_path = f"{IMAGE_STORE}/{name}.sif"
+    request_etag = request.headers.get("ETag")
+    current_etag = ""
+    try:
+        current_etag = os.getxattr(file_path, HASH_ATTR).decode("utf-8")
+    except OSError:
+        pass
+
+    if request_etag is None and current_etag is not None:
+        return JSONResponse(
+            status_code=428,
+            headers={"Etag": current_etag},
+            content={"detail": "Etag header is required for script update."},
+        )
+    elif request_etag and current_etag and request_etag != current_etag:
+        return JSONResponse(
+            status_code=412,
+            content={"detail": "Etag mismatch. The script has been modified."},
+        )
+
     with open(file_path, "wb") as f:
         content = await file.read()
+        hash = hashlib.sha256(content).hexdigest()
+        try:
+            os.setxattr(file_path, HASH_ATTR, hash.encode("utf-8"))
+        except OSError as e:
+            raise HTTPException(status_code=500, detail=f"Error setting ETag: {str(e)}")
         f.write(content)
     if not content:
         raise HTTPException(status_code=400, detail="File is empty")
